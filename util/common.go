@@ -15,6 +15,12 @@ func GenerateConvertedFilePath(filePath string) string {
 	return filepath.Join(filepath.Dir(filePath), base+"--converted"+ext)
 }
 
+func GenerateUtf8FilePath(filePath string) string {
+	ext := filepath.Ext(filePath)
+	name := strings.TrimSuffix(filepath.Base(filePath), ext)
+	return filepath.Join(filepath.Dir(filePath), name+"_utf8"+ext)
+}
+
 func DetectDelimiter(filePath string) (rune, error) {
 	file, err := os.Open(filePath)
 	

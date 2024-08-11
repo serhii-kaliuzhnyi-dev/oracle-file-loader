@@ -99,7 +99,7 @@ func GenerateTableConfig(filePath string, tableName string, delimiter rune) (Tab
 	return tableConfig, nil
 }
 
-func CreateTableFromConfig(user, password, dsn string, tableConfig TableConfig) error {
+func CreateTableFromConfig(user, password, dsn string, tableConfig *TableConfig) error {
 	connString := fmt.Sprintf("%s/%s@%s", user, password, dsn)
 	db, err := sql.Open("godror", connString)
 	if err != nil {
@@ -117,22 +117,7 @@ func CreateTableFromConfig(user, password, dsn string, tableConfig TableConfig) 
 		return nil
 	}
 
-	createTableSQL := fmt.Sprintf("CREATE TABLE %s (", tableConfig.Metadata.TableName)
-	first := true
-	for _, colName := range tableConfig.ColumnsOrder {
-		colInfo := tableConfig.Columns[colName]
-		if !first {
-			createTableSQL += ", "
-		}
-		first = false
-		if colInfo.Type == "NUMBER" || colInfo.Type == "NUMERIC" || colInfo.Type == "DATE" || colInfo.Type == "TIMESTAMP WITH TIME ZONE" {
-			createTableSQL += fmt.Sprintf("%s %s", colName, colInfo.Type)
-		} else {
-			createTableSQL += fmt.Sprintf("%s VARCHAR2(%d)", colName, colInfo.Length)
-		}
-	}
-	createTableSQL += ")"
-
+	createTableSQL := GenerateCreateTableSQL(tableConfig)
 	log.Printf("SQL script for creating a table: %s", createTableSQL)
 
 	_, err = db.Exec(createTableSQL)
@@ -157,4 +142,29 @@ func checkIfTableExists(db *sql.DB, tableName string) (bool, error) {
 	}
 
 	return count > 0, nil
+}
+
+
+// GenerateCreateTableSQL generates a SQL CREATE TABLE statement from the given TableConfig.
+func GenerateCreateTableSQL(tableConfig *TableConfig) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", tableConfig.Metadata.TableName))
+	first := true
+	for _, colName := range tableConfig.ColumnsOrder {
+		colInfo := tableConfig.Columns[colName]
+		if !colInfo.Create {
+			continue
+		}
+		if !first {
+			sb.WriteString(",\n")
+		}
+		first = false
+		if colInfo.Type == "NUMBER" || colInfo.Type == "NUMERIC" || colInfo.Type == "DATE" || colInfo.Type == "TIMESTAMP WITH TIME ZONE" {
+			sb.WriteString(fmt.Sprintf("  %s %s", colName, colInfo.Type))
+		} else {
+			sb.WriteString(fmt.Sprintf("  %s VARCHAR2(%d)", colName, colInfo.Length))
+		}
+	}
+	sb.WriteString("\n);")
+	return sb.String()
 }

@@ -4,15 +4,18 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/serhii-kaliuzhnyi-dev/oracle-file-uploader/db"
 )
 
-func GenerateCtlFile(csvFilePath, ctlFilePath, tableName string, tableConfig db.TableConfig, delimiter rune) error {
+func GenerateCtlFile(csvFilePath, ctlFilePath, tableName string, tableConfig *db.TableConfig, delimiter rune, infile string) error {
 	var fields []string
 	for _, colName := range tableConfig.ColumnsOrder {
-		fields = append(fields, colName)
+		if tableConfig.Columns[colName].Create {
+			fields = append(fields, colName)
+		}
 	}
 	fieldsStr := strings.Join(fields, ",\n  ")
 
@@ -23,10 +26,14 @@ func GenerateCtlFile(csvFilePath, ctlFilePath, tableName string, tableConfig db.
 		delimiterStr = fmt.Sprintf("FIELDS TERMINATED BY '%c' OPTIONALLY ENCLOSED BY '\"'", delimiter)
 	}
 
-	ctlContent := fmt.Sprintf(`OPTIONS (bad=ksg_bad.log, log=ksg.log, errors=0, skip=1, ROWS=65535, BINDSIZE=65535000, READSIZE=65535000)
+	// Use the table name for the bad and log files
+	badFileName := fmt.Sprintf("%s_bad.log", tableName)
+	logFileName := fmt.Sprintf("%s.log", tableName)
+
+	ctlContent := fmt.Sprintf(`OPTIONS (bad=%s, log=%s, errors=0, skip=1, ROWS=65535, BINDSIZE=65535000, READSIZE=65535000)
 LOAD DATA
 CHARACTERSET CL8MSWIN1251
-INFILE '%s'
+%s
 INTO TABLE %s
 REPLACE
 %s
@@ -35,7 +42,7 @@ TRAILING NULLCOLS
 (
   %s
 )
-`, csvFilePath, tableName, delimiterStr, fieldsStr)
+`, badFileName, logFileName, infile, tableName, delimiterStr, fieldsStr)
 
 	err := os.WriteFile(ctlFilePath, []byte(ctlContent), 0644)
 	if err != nil {
@@ -46,7 +53,12 @@ TRAILING NULLCOLS
 }
 
 func RunSQLLoader(user, password, dsn, ctlFilePath string) (string, error) {
-	cmd := exec.Command("sqlldr", fmt.Sprintf("userid=%s/%s@%s", user, password, dsn), fmt.Sprintf("control=%s", ctlFilePath), "bad=uz_bad.bad", "log=uz.log", "errors=10")
+	// Extract the table name from the control file path to use for the log and bad files
+	tableName := strings.TrimSuffix(filepath.Base(ctlFilePath), ".ctl")
+	badFileName := fmt.Sprintf("%s_bad.bad", tableName)
+	logFileName := fmt.Sprintf("%s.log", tableName)
+
+	cmd := exec.Command("sqlldr", fmt.Sprintf("userid=%s/%s@%s", user, password, dsn), fmt.Sprintf("control=%s", ctlFilePath), fmt.Sprintf("bad=%s", badFileName), fmt.Sprintf("log=%s", logFileName), "errors=10")
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
