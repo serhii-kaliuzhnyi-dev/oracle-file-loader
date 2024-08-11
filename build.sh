@@ -5,4 +5,4 @@ export GOOS=windows
 export GOARCH=amd64
 
 # Build the Go project
-go build -o loader.exe
+go build -ldflags="-s -w" -o loader.exe
