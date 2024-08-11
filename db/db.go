@@ -165,6 +165,6 @@ func GenerateCreateTableSQL(tableConfig *TableConfig) string {
 			sb.WriteString(fmt.Sprintf("  %s VARCHAR2(%d)", colName, colInfo.Length))
 		}
 	}
-	sb.WriteString("\n);")
+	sb.WriteString("\n)")
 	return sb.String()
 }
